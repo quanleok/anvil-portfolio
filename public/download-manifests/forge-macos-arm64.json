@@ -1,0 +1,8 @@
+{
+  "version": "0.2.2",
+  "platform": "macos",
+  "arch": "arm64",
+  "dmg": "/downloads/forge-macos-arm64.dmg",
+  "objectKey": "downloads/forge-macos-arm64-0.2.2-202605071158.dmg",
+  "storage": "bunny"
+}

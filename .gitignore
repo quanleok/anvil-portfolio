@@ -1,0 +1,95 @@
+
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.DS_Store
+.env.development.local
+.env.local
+.env.production.local
+.env.test.local
+.env*
+!.env.example
+.next
+.pnp.*
+.pnpm-debug.log*
+.vercel
+.anvil-web/
+supabase/.temp/
+.yarn/*
+*.pem
+*.tsbuildinfo
+/.next/
+/.pnp
+/build
+/coverage
+/node_modules
+/out/
+/apps/desktop/dist
+/apps/desktop/node_modules
+/apps/desktop/release
+/apps/desktop/build/icon.iconset
+/apps/desktop/test-results
+/apps/desktop/bin
+/apps/desktop-dogfood-runner
+/public/downloads
+# debug
+# dependencies
+# env files (can opt-in for committing if needed)
+# misc
+# next.js
+# production
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# testing
+# typescript
+# vercel
+next-env.d.ts
+node_modules
+npm-debug.log*
+tsconfig.tsbuildinfo
+yarn-debug.log*
+yarn-error.log*
+/apps/desktop/electron/build-info.json
+
+# Agent / browser-automation scratch (generated during sessions)
+.claude/scheduled_tasks.lock
+.playwright-mcp/
+.codex/
+.codex-backups/
+
+# MCP config — per-worktree (role differs per specialist). Commit
+# .mcp.json.example as the canonical shape; each worktree copies it
+# locally and sets its own --role arg.
+.mcp.json
+
+# CHANGELOG.md is auto-generated from `git log` by
+# apps/desktop/scripts/stamp-build.mjs on every prebuild. Gitignored
+# because committing it would churn on every commit + make the
+# working tree "dirty" after every npm run dev/build cycle.
+CHANGELOG.md
+
+# Experimental 3D nav-icon source (Topview .glb + previews). Not
+# referenced anywhere in apps/desktop/src as of 2026-05-11. ~25 MB.
+# Keep locally for prototyping; if/when wired up, either commit then
+# (with LFS for the .glb files) or leave ignored.
+/apps/desktop/src/assets/nav-icons/3d/
+
+# Private production methods are kept outside the public source tree.
+/src/server/anvil/method-library/premium-skills/
+/apps/desktop/electron/defaults/premium-skills/
+/apps/desktop/electron/defaults/skills/agent-manual.md
+/apps/desktop/electron/defaults/skills/intake-protocol.md
+/apps/desktop/electron/defaults/skills/prompt-protocol.md
+/docs/archive/superpowers/plans/2026-05-04-scope-intake.md
+
+# Private creative project records and production method planning.
+/docs/archive/feedback-2026-04-25/
+/docs/prompt-knowledge-roadmap.md
+/docs/archive/free-local-release-standby-2026-05-05/premium-automation.md
+
+# Public portfolio documentation uses a small reviewed set.
+/archive/
+/CLAUDE.md
+/docs/*
+!/docs/README.md
+!/docs/09-protected-server-split.md

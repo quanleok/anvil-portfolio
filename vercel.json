@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "shotforge/main": true,
+      "main": true
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/media/cleanup",
+      "schedule": "0 9 * * 0"
+    }
+  ]
+}

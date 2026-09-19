@@ -1,0 +1,2216 @@
+/* Three-column visual spec sheet implementation
+ * (~/Downloads/anvil_three_column_visual_spec_sheet.html).
+ *
+ * Variables alias the existing globals.css palette under the spec
+ * names so component code can stay readable. Kept in this file
+ * (imported only from the workspace shell) so the parallel
+ * globals.css trim work doesn't conflict.
+ */
+
+.anvil-workspace-shell {
+  --color-text-primary: var(--foreground);
+  --color-text-secondary: var(--muted);
+  --color-text-tertiary: var(--project-dim);
+  --color-text-info: var(--accent);
+  --color-text-success: var(--project-green);
+  --color-background-primary: var(--background);
+  --color-background-secondary: var(--panel);
+  --color-background-tertiary: var(--panel-quiet);
+  --color-background-info: var(--accent-dim);
+  --color-border-tertiary: var(--border);
+  --border-radius-md: 6px;
+  --border-radius-lg: 8px;
+  /* Grid track widths — owners write the px values inline as CSS
+     vars so the values stay tunable from JS, but the template
+     itself lives here. Two layout variants:
+       default                                → 6 tracks (rail · docs · splitter · editor · splitter · agent)
+       .is-rail-collapsed                     → 4 tracks (rail · editor · splitter · agent)
+     2026-05-14 layout swap: editor lives in the 1fr flex slot (where
+     the user types); agent lives in the fixed right slot (matching
+     the local-app column order). `--col-right` still names the
+     right-most column's width — semantically it now controls the
+     agent pane's width, not the editor. Improvement-plan §3.1. */
+  --col-rail: 80px;
+  --col-docs: 280px;
+  --col-right: 360px;
+  display: grid;
+  grid-template-columns:
+    var(--col-rail) var(--col-docs) 4px minmax(280px, 1fr) 4px var(--col-right);
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  /* Firefox/Edge slim subtle scrollbars; Webkit pseudo-elements get
+     the matching treatment below. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167, 139, 250, 0.25) transparent;
+}
+
+.anvil-workspace-shell.is-rail-collapsed {
+  grid-template-columns:
+    var(--col-rail) minmax(280px, 1fr) 4px var(--col-right);
+}
+
+/* Slim scrollbars for every scroll container inside the workspace.
+   Chrome's default dark-mode scrollbar reads chunky and grey against
+   the violet UI — quan flagged it as "doesnt look good". Track is
+   transparent; thumb is a thin pill that brightens on hover. 6px is
+   enough to grab without dominating the rail. */
+.anvil-workspace-shell *::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.anvil-workspace-shell *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.anvil-workspace-shell *::-webkit-scrollbar-thumb {
+  background: rgba(167, 139, 250, 0.18);
+  border-radius: 999px;
+}
+
+.anvil-workspace-shell *::-webkit-scrollbar-thumb:hover {
+  background: rgba(167, 139, 250, 0.4);
+}
+
+.anvil-workspace-shell *::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ───── IconRail (thin column) ───── */
+
+.anvil-workspace-iconrail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 12px 6px;
+  border-right: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  min-width: 0;
+  overflow: hidden;
+  gap: 4px;
+}
+
+.anvil-workspace-iconrail-logo {
+  display: grid;
+  place-items: center;
+  height: 44px;
+  margin-bottom: 4px;
+  text-decoration: none;
+}
+
+.anvil-workspace-iconrail-logo img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 10px rgba(167, 139, 250, 0.4));
+}
+
+.anvil-workspace-iconrail-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Wraps a section icon button + its "editing files" badge so the
+   badge stacks under the button as part of the same column entry.
+   Without this, the touched-files block sat between section buttons
+   and broke the rail's clean vertical rhythm. */
+.anvil-workspace-iconrail-group {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+/* "editing <files>" badge — mirror of the desktop rail-touched-files
+   panel. Sits under the active section icon while paths touched in
+   the last agent turn are still in the 14s linger window. Up to 3
+   basenames, most recent first; truncates long names so the rail
+   width doesn't blow out. */
+.anvil-workspace-iconrail-touched {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 6px 6px;
+  margin-top: -2px;
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-tertiary);
+  border: 0.5px solid var(--color-border-tertiary);
+}
+
+.anvil-workspace-iconrail-touched-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-info);
+  opacity: 0.7;
+}
+
+.anvil-workspace-iconrail-touched-name {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-align: center;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.anvil-workspace-iconrail-tabs > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 60px;
+  padding: 6px 4px;
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.anvil-workspace-iconrail-tabs > button:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.anvil-workspace-iconrail-tabs > button.is-active {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-info);
+}
+
+/* Outline pulse on the active section icon while the agent is
+   mid-turn. Reuses the same violet accent + 1.4s breath as the
+   ChatThread "Thinking…" dots so the two pieces of feedback feel
+   like one system. */
+.anvil-workspace-iconrail-tabs > button.is-working {
+  animation: anvil-workspace-working 1.4s ease-in-out infinite;
+}
+
+.anvil-workspace-rail-row.is-working {
+  animation: anvil-workspace-working 1.4s ease-in-out infinite;
+}
+
+@keyframes anvil-workspace-working {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.35); }
+  50%      { box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.55); }
+}
+
+/* Elapsed-seconds badge inside the "Working in Section · file…"
+   thinking line. Small monospace chip on the right so the user
+   sees concrete progress as the turn runs long. */
+.anvil-workspace-thinking-elapsed {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-background-tertiary);
+  border: 0.5px solid var(--color-border-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+}
+
+/* Working-state cue lives ONLY on the chat box itself — the
+   composer textarea. Earlier iterations also pulsed the whole
+   chat panel with an inset breath, but quan flagged that as too
+   ambient; the signal should sit on the actual input the user is
+   waiting on. The text dims, the border softens to a quiet
+   violet, and the box pulses a clear purple outline ring on the
+   same 1.4s cadence as the iconrail / selected row.
+   Hover/focus overrides keep the textarea usable so the user can
+   pre-type a follow-up. */
+.anvil-workspace-shell .anvil-workspace-agent.is-working > form > textarea {
+  color: var(--color-text-tertiary);
+  border-color: rgba(167, 139, 250, 0.35);
+  animation: anvil-workspace-composer-glow 1.4s ease-in-out infinite;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent.is-working > form > textarea:focus {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-info);
+}
+
+/* Composer outline pulse — thicker and brighter than the original
+   iconrail breath because it's now the only chat-side cue. 1px → 3px
+   ring at alpha 0.55 → 0.85 reads clearly without screaming. */
+@keyframes anvil-workspace-composer-glow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.55); }
+  50%      { box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.85); }
+}
+
+.anvil-workspace-iconrail-tabs > button > span {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+/* Bundled WebP section icons (parity with the desktop app). The glyph
+   wrapper stacks the closed + open images on top of each other; hover
+   and active states cross-fade to the open variant. Singleton icons
+   (compass) just brighten on hover. */
+.anvil-workspace-iconrail-glyph {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: inline-block;
+}
+
+.anvil-workspace-iconrail-glyph > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: opacity 140ms ease;
+  pointer-events: none;
+}
+
+.anvil-workspace-iconrail-glyph > img.is-base {
+  opacity: 0.78;
+}
+
+.anvil-workspace-iconrail-glyph > img.is-open {
+  opacity: 0;
+}
+
+.anvil-workspace-iconrail-tabs > button:hover .anvil-workspace-iconrail-glyph > img.is-base,
+.anvil-workspace-iconrail-tabs > button.is-active .anvil-workspace-iconrail-glyph > img.is-base {
+  opacity: 1;
+}
+
+.anvil-workspace-iconrail-tabs > button:hover .anvil-workspace-iconrail-glyph > img.is-open,
+.anvil-workspace-iconrail-tabs > button.is-active .anvil-workspace-iconrail-glyph > img.is-open {
+  opacity: 1;
+}
+
+.anvil-workspace-iconrail-tabs > button:hover .anvil-workspace-iconrail-glyph:has(.is-open) > img.is-base,
+.anvil-workspace-iconrail-tabs > button.is-active .anvil-workspace-iconrail-glyph:has(.is-open) > img.is-base {
+  opacity: 0;
+}
+
+.anvil-workspace-iconrail-account {
+  display: grid;
+  place-items: center;
+  margin-top: auto;
+  padding: 8px 0 4px;
+  text-decoration: none;
+  border-top: 0.5px solid var(--color-border-tertiary);
+}
+
+.anvil-workspace-iconrail-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ───── DocsRail (wider docs panel next to icon rail) ───── */
+
+.anvil-workspace-docsrail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  overflow: hidden;
+}
+
+.anvil-workspace-docsrail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+
+.anvil-workspace-docsrail-head > div:first-child {
+  min-width: 0;
+}
+
+.anvil-workspace-docsrail-head h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-docsrail-head p {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin: 3px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Upload-status takeover of the head subtitle: while Workshop/Assets
+   is mid-upload the subtitle line carries the live status so the
+   user sees the +New action is doing something. */
+.anvil-workspace-docsrail-head p.is-busy {
+  color: var(--color-text-info);
+  animation: anvil-workspace-working 1.4s ease-in-out infinite;
+  animation-name: anvil-docsrail-busy-fade;
+  border-radius: 4px;
+  padding: 0 2px;
+  margin: 3px -2px 0;
+}
+
+.anvil-workspace-docsrail-head p.is-status {
+  color: var(--color-text-secondary);
+}
+
+@keyframes anvil-docsrail-busy-fade {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+.anvil-workspace-docsrail-head > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text-info);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+
+.anvil-workspace-docsrail-head > button:hover {
+  background: transparent;
+  color: var(--color-text-info);
+  opacity: 0.7;
+}
+
+.anvil-workspace-docsrail-head > button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.anvil-workspace-docsrail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 6px;
+}
+
+.anvil-workspace-session-warning {
+  margin: 2px 6px 8px;
+  padding: 8px 10px;
+  border: 0.5px solid rgba(245, 158, 11, 0.32);
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.08);
+  color: #f2c36b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* ───── Legacy single-rail wrapper (kept for any callers still using it) ───── */
+
+.anvil-workspace-shell .anvil-workspace-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 10px;
+  border-right: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.anvil-workspace-rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.anvil-workspace-shell .anvil-workspace-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  width: auto;
+  height: auto;
+  padding: 0;
+}
+
+.anvil-workspace-shell .anvil-workspace-logo img {
+  width: 22px;
+  height: 22px;
+  filter: drop-shadow(0 0 8px rgba(167, 139, 250, 0.3));
+}
+
+.anvil-workspace-rail-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.anvil-workspace-rail-collapse:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-secondary);
+}
+
+.anvil-workspace-rail-new-chat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  background: transparent;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.anvil-workspace-rail-new-chat:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-rail.is-collapsed .anvil-workspace-rail-new-chat {
+  justify-content: center;
+  padding: 0;
+}
+
+/* Rail file tree — docs picker for the active section. Compact
+   rendering so 220px-wide rail fits readable file titles. */
+
+.anvil-workspace-rail-tree {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.anvil-workspace-rail-tree-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.anvil-workspace-rail-tree-list--assets {
+  padding: 8px 8px 12px;
+}
+
+.anvil-workspace-rail-tree-empty {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 8px 6px;
+  margin: 0;
+  font-style: italic;
+}
+
+.anvil-workspace-rail-group {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.anvil-workspace-rail-group > h4 {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: 0;
+  padding: 4px 6px 2px;
+}
+
+.anvil-workspace-rail-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  text-align: left;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.anvil-workspace-rail-row:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-rail-row.is-selected {
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+}
+
+/* Inline-rename input slots into the row by inheriting all the row
+   geometry. Drops the row's hover/selected backgrounds (kept neutral
+   while editing) and shows a violet focus ring so the user knows
+   they're in edit mode. Outline-only so the row height doesn't jump
+   compared to the button it replaces. */
+.anvil-workspace-rail-row--renaming {
+  font-family: inherit;
+  font-weight: 600;
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  outline: 1px solid rgba(167, 139, 250, 0.55);
+  outline-offset: -1px;
+}
+
+.anvil-workspace-rail-row--renaming:focus {
+  outline-color: var(--color-text-info);
+}
+
+/* Failure feedback: PATCH didn't land. The row keeps the user's
+   typed value (no silent revert), the outline turns red, and the
+   tooltip carries the server message. User retries by pressing
+   Enter again, or Esc to cancel. */
+.anvil-workspace-rail-row--renaming.has-error {
+  outline-color: rgba(248, 113, 113, 0.75);
+}
+
+/* Touched-path flash — 1.5s violet pulse when the agent writes to
+   this row's file. The .is-touched class stays applied for ~14s
+   (so the IconRail "editing <files>" badge has time to be read),
+   but the row's violet color shouldn't last that long or every
+   scene/prompt the agent just created looks permanently "selected".
+   Solution: keep the visual entirely inside the animation timeline.
+   Hold violet for 20% of the duration, then fade to inherited
+   default. Since `background`/`color` aren't set outside the
+   keyframes, the row returns to its non-touched styling after the
+   1.5s window naturally — no manual reset needed. */
+.anvil-workspace-rail-row.is-touched {
+  animation: anvil-workspace-rail-touched-flash 1.5s ease-out;
+}
+
+@keyframes anvil-workspace-rail-touched-flash {
+  0%, 20% {
+    background: var(--color-background-info);
+    color: var(--color-text-info);
+  }
+  100% {
+    background: transparent;
+    color: inherit;
+  }
+}
+
+.anvil-workspace-rail-row > strong {
+  flex: 1;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-rail-row > span:not(.anvil-workspace-rail-row-dot) {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.anvil-workspace-rail-row.is-selected > span:not(.anvil-workspace-rail-row-dot) {
+  color: var(--color-text-info);
+  opacity: 0.7;
+}
+
+.anvil-workspace-rail-row--scene {
+  font-weight: 500;
+}
+
+/* Placeholder + "add scene" rows — dashed, dim, brighten on hover.
+   Used when the master script doesn't exist yet, or as an inline
+   "Add scene" affordance below the scene list. */
+.anvil-workspace-rail-row--placeholder {
+  color: var(--color-text-tertiary);
+  font-weight: 500;
+  border: 0.5px dashed var(--color-border-tertiary);
+  background: transparent;
+  margin-top: 4px;
+}
+
+.anvil-workspace-rail-row--placeholder:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-info);
+  border-color: rgba(167, 139, 250, 0.4);
+  border-style: solid;
+}
+
+/* Scenes nest visually under Master Script — the .anvil-workspace-
+   rail-scene wrapper indents the scene + its prompts to the right
+   so the hierarchy reads as Master → scenes → prompts even though
+   each row remains a sibling DOM element. A faint left-border
+   running down the indent acts as a tree guideline. */
+.anvil-workspace-rail-scene {
+  margin-left: 10px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Scene row + inline "add prompt" button. Plus button is dim by
+   default and brightens on hover; clicking it creates a new
+   prompt nested under the scene's stem. */
+.anvil-workspace-rail-scene-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.anvil-workspace-rail-scene-head > .anvil-workspace-rail-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.anvil-workspace-rail-scene-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text-info);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  flex-shrink: 0;
+}
+
+/* Reveal the +scene/+prompt button only on hover of its row — the
+   user flagged the dim-but-visible state as "too many plus icons
+   showing". Each scene's add-prompt + appears when its row is
+   hovered; the master script's add-scene + appears on the master
+   row's hover. */
+.anvil-workspace-rail-scene:hover .anvil-workspace-rail-scene-add,
+.anvil-workspace-rail-scene-head:hover .anvil-workspace-rail-scene-add,
+.anvil-workspace-rail-scene-add:focus-visible {
+  opacity: 1;
+}
+
+.anvil-workspace-rail-scene-add:hover {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-info);
+  opacity: 1;
+}
+
+.anvil-workspace-rail-row--prompt {
+  height: 22px;
+  padding-left: 18px;
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+}
+
+.anvil-workspace-rail-row-dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* Asset card row wrapper — name button + hover-revealed × delete.
+   Same flex pattern as scene-head so the row keeps its full
+   width but a small action button sits trailing. */
+.anvil-workspace-rail-card-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.anvil-workspace-rail-card-row > .anvil-workspace-rail-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.anvil-workspace-rail-card-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  font-size: 14px;
+  line-height: 1;
+  transition: opacity 120ms ease, color 120ms ease;
+  flex-shrink: 0;
+}
+
+.anvil-workspace-rail-card-row:hover .anvil-workspace-rail-card-delete {
+  opacity: 1;
+}
+
+.anvil-workspace-rail-card-delete:hover {
+  background: transparent;
+  border-color: transparent;
+  color: #f87171;
+}
+
+/* Armed state — first click of the delete × turns it red + always
+   visible (overrides the row-hover opacity gate) so the user can
+   see they need to click again to confirm. Auto-reverts after 2.5s
+   in the React state (see RailFileTree). */
+.anvil-workspace-rail-card-row .anvil-workspace-rail-card-delete.is-armed,
+.anvil-workspace-rail-card-delete.is-armed {
+  opacity: 1;
+  background: rgba(220, 38, 38, 0.18);
+  border-color: rgba(252, 165, 165, 0.55);
+  color: #fecaca;
+}
+
+/* Same pattern on the AssetCardPreview's full-size Delete button. */
+.anvil-workspace-section--assets header button.is-armed {
+  background: rgba(220, 38, 38, 0.18);
+  border-color: rgba(252, 165, 165, 0.55);
+  color: #fecaca;
+}
+
+/* Section pill on cards rendered in the "All" view — small uppercase
+   chip on the right side of each row replacing the previous plain
+   span so the section label reads as a category tag, not duration. */
+.anvil-workspace-rail-card-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-background-tertiary);
+  border: 0.5px solid var(--color-border-tertiary);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary) !important;
+  opacity: 1 !important;
+}
+
+.anvil-workspace-rail-row.is-selected .anvil-workspace-rail-card-pill {
+  color: var(--color-text-info) !important;
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(167, 139, 250, 0.08);
+}
+
+.anvil-workspace-rail-thumb-section {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 4px 0 10px;
+}
+
+.anvil-workspace-rail-thumb-section > h4 {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: 0;
+  padding: 0 2px;
+}
+
+.anvil-workspace-asset-thumb-grid,
+.anvil-workspace-media-thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
+
+.anvil-workspace-asset-thumb-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.anvil-workspace-asset-thumb,
+.anvil-workspace-media-thumb {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 0;
+  border: 0.5px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.anvil-workspace-asset-thumb:hover,
+.anvil-workspace-media-thumb:hover {
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-asset-thumb.is-selected,
+.anvil-workspace-media-thumb.is-selected {
+  color: var(--color-text-info);
+}
+
+.anvil-workspace-asset-thumb-preview,
+.anvil-workspace-media-thumb-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #05070a;
+  border: 0.5px solid rgba(255, 255, 255, 0.06);
+}
+
+.anvil-workspace-asset-thumb:hover .anvil-workspace-asset-thumb-preview,
+.anvil-workspace-media-thumb:hover .anvil-workspace-media-thumb-preview {
+  border-color: rgba(167, 139, 250, 0.28);
+}
+
+.anvil-workspace-asset-thumb.is-selected .anvil-workspace-asset-thumb-preview,
+.anvil-workspace-media-thumb.is-selected .anvil-workspace-media-thumb-preview {
+  border-color: rgba(167, 139, 250, 0.95);
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.55);
+}
+
+.anvil-workspace-asset-thumb-preview > img,
+.anvil-workspace-media-thumb-preview > img,
+.anvil-workspace-asset-thumb-preview > video,
+.anvil-workspace-media-thumb-preview > video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.anvil-workspace-asset-thumb-preview > img.is-icon,
+.anvil-workspace-media-thumb-preview > img.is-icon {
+  width: 46%;
+  height: 46%;
+  object-fit: contain;
+  opacity: 0.88;
+  filter: drop-shadow(0 0 10px rgba(167, 139, 250, 0.28));
+}
+
+.anvil-workspace-asset-thumb-title,
+.anvil-workspace-media-thumb-title {
+  min-width: 0;
+  width: 100%;
+  padding: 0 2px 1px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-asset-thumb-meta {
+  padding: 0 2px 2px;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-asset-thumb-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  background: rgba(5, 7, 10, 0.74);
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.anvil-workspace-asset-thumb-wrap:hover .anvil-workspace-asset-thumb-delete,
+.anvil-workspace-asset-thumb-delete.is-armed {
+  opacity: 1;
+}
+
+.anvil-workspace-asset-thumb-delete:hover,
+.anvil-workspace-asset-thumb-delete.is-armed {
+  background: rgba(127, 29, 29, 0.9);
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.anvil-workspace-asset-thumb-rename {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 19px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 0.5px solid rgba(167, 139, 250, 0.5);
+  background: rgba(10, 13, 18, 0.96);
+  color: var(--color-text-primary);
+  font-size: 10px;
+  font-weight: 600;
+  outline: none;
+}
+
+.anvil-workspace-asset-thumb-rename.has-error {
+  border-color: rgba(248, 113, 113, 0.8);
+  box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.28);
+}
+
+/* Asset category strip — shown in the rail when activeSection ===
+   "assets". Vertical list of icon+label rows (one column), like a
+   sidebar filter menu. Cleaner than the asymmetric 2-col grid the
+   earlier pass tried, since 7 categories never divides evenly. */
+
+.anvil-workspace-rail-category-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 4px 10px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+
+.anvil-workspace-rail-category-strip > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.anvil-workspace-rail-category-strip > button:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-rail-category-strip > button.is-active {
+  background: var(--color-background-info);
+  border-color: rgba(167, 139, 250, 0.25);
+  color: var(--color-text-info);
+  font-weight: 600;
+}
+
+.anvil-workspace-rail-category-strip > button > img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.anvil-workspace-rail-category-strip > button > span {
+  flex: 1;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.anvil-workspace-rail-orphans {
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+}
+
+.anvil-workspace-rail-orphans > h4 {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin: 0;
+  padding: 4px 6px 2px;
+}
+
+.anvil-workspace-account-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+  text-decoration: none;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  min-width: 0;
+}
+
+.anvil-workspace-account-chip:hover {
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.anvil-workspace-account-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ───── Chat (center column) — no header, ChatGPT-style ───── */
+
+.anvil-workspace-shell .anvil-workspace-agent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-background-primary);
+  /* position:relative so the .is-drag-over overlay below absolute-
+     positions against the full agent column rather than the body. */
+  position: relative;
+}
+
+/* Drop-target generosity (improvement-plan 4.7) — when a drag with
+   files enters the agent column, an overlay covers the column with
+   a violet outline + centered "Drop to attach…" hint. The aside's
+   drop handlers in AgentChat.tsx own the actual file pickup. The
+   overlay is pointer-events: none on its own children so the drag
+   events keep firing on the aside underneath; the aside also blocks
+   accidental drops on the column edges that used to miss the
+   smaller composer-only target. */
+.anvil-workspace-shell .anvil-workspace-agent.is-drag-over {
+  /* Tinted inner edge so the column itself reads as "armed" even
+     where the overlay's softer fill might wash out (corners). */
+  box-shadow: inset 0 0 0 2px rgba(167, 139, 250, 0.6);
+}
+
+.anvil-workspace-shell .anvil-workspace-agent-drop-overlay {
+  position: absolute;
+  inset: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(167, 139, 250, 0.08);
+  border: 1.5px dashed rgba(167, 139, 250, 0.7);
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 5;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-info);
+  letter-spacing: 0.02em;
+  animation: anvil-workspace-drop-overlay-in 120ms ease-out;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent-drop-overlay > span {
+  padding: 8px 18px;
+  background: var(--color-background-primary);
+  border: 0.5px solid rgba(167, 139, 250, 0.45);
+  border-radius: 999px;
+}
+
+@keyframes anvil-workspace-drop-overlay-in {
+  0% { opacity: 0; transform: scale(0.99); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.anvil-workspace-shell .anvil-workspace-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 16px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* Long unbroken strings (raw JSON, URLs, file paths) inside an agent
+   bubble would otherwise overflow horizontally and steal the column's
+   scroll context — visible 2026-05-12 when the model dumped a JSON
+   wall instead of a parsed reply. Force word-break + preserve newlines
+   so the bubble stays inside its 90% width and the messages container
+   stays the sole scroll surface. */
+.anvil-workspace-shell .anvil-workspace-message-prose,
+.anvil-workspace-shell .anvil-workspace-message-bubble {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* When the thread overflows its scroll area, flex-end with overflow-y
+   auto can clip top messages in some engines. `margin-top: auto` on
+   the first message preserves bottom-anchoring while still letting
+   the user scroll up to older content. */
+.anvil-workspace-shell .anvil-workspace-messages > *:first-child {
+  margin-top: auto;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 32px 20px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 14px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: 14px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form textarea:focus {
+  outline: none;
+  border-color: var(--color-text-info);
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form button {
+  align-self: flex-end;
+  padding: 7px 14px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text-info);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ───── Section workspace (right pane) ───── */
+
+.anvil-workspace-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+  overflow: hidden;
+  transition: border-left-color 200ms ease;
+}
+
+/* 6th cue in the agent-working visual system. The right-pane left
+   border shifts from neutral tertiary to a faint Anvil violet while
+   the agent is mid-turn. Subtle on purpose — the chat-panel inset
+   glow and the touched-row pulse carry the louder signal; this just
+   ties the workspace canvas into the working state so the whole UI
+   reads as cohesive instead of one isolated chat sidebar. */
+body[data-anvil-agent-busy="true"] .anvil-workspace-section {
+  border-left-color: rgba(167, 139, 250, 0.45);
+}
+
+.anvil-workspace-section .anvil-workspace-tree {
+  flex-shrink: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  padding: 6px 0;
+}
+
+.anvil-workspace-file-group {
+  display: block;
+  padding: 4px 0;
+}
+
+.anvil-workspace-file-group h2 {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  padding: 4px 14px;
+  margin: 0;
+}
+
+.anvil-workspace-file-group > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 14px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.anvil-workspace-file-group > button:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-file-group > button.is-active {
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+}
+
+.anvil-workspace-file-group > button > span {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.anvil-workspace-file-group > button.is-active > span {
+  color: var(--color-text-info);
+  opacity: 0.7;
+}
+
+.anvil-workspace-file-group > button > strong {
+  flex: 1;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-side-empty {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 8px 14px;
+  margin: 0;
+  font-style: italic;
+}
+
+.anvil-workspace-section .anvil-workspace-editor {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header > div:first-child {
+  min-width: 0;
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header h2 {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header p {
+  font-size: 10px;
+  margin: 2px 0 0;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header span {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header span.is-dirty {
+  color: var(--color-text-info);
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header > div:last-child > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 8px;
+  background: transparent;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header > div:last-child > button.is-active {
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+}
+
+.anvil-workspace-section .anvil-workspace-editor > header > div:last-child > button:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-section .anvil-workspace-editor-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.anvil-workspace-section .anvil-workspace-editor-body.has-history {
+  grid-template-columns: 1fr 280px;
+}
+
+.anvil-workspace-section .anvil-workspace-editor-body > textarea {
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  background: transparent;
+  border: none;
+  resize: none;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.anvil-workspace-section .anvil-workspace-editor-body > textarea:focus {
+  outline: none;
+}
+
+.anvil-workspace-section .anvil-workspace-history {
+  border-left: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.anvil-workspace-section .anvil-workspace-history > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+}
+
+.anvil-workspace-section .anvil-workspace-history h3 {
+  font-size: 11px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+/* ───── Tool-call card ───── */
+
+.anvil-workspace-tool-call {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-secondary);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  animation: anvil-workspace-tool-call-in 110ms ease-out;
+}
+
+@keyframes anvil-workspace-tool-call-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anvil-workspace-tool-call {
+    animation: none;
+  }
+}
+
+.anvil-workspace-tool-call:hover {
+  background: var(--color-background-tertiary);
+}
+
+.anvil-workspace-tool-call-icon--create {
+  color: var(--color-text-success);
+}
+
+.anvil-workspace-tool-call-icon--edit {
+  color: var(--color-text-info);
+}
+
+.anvil-workspace-tool-call-body {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+}
+
+.anvil-workspace-tool-call-title {
+  display: block;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-tool-call-meta {
+  display: block;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+}
+
+.anvil-workspace-tool-call-trailing {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.anvil-workspace-tool-call-spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-text-tertiary);
+  border-top-color: var(--color-text-primary);
+  animation: anvil-workspace-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes anvil-workspace-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ───── §5 Chat message types ───── */
+
+.anvil-workspace-message {
+  font-size: 13px;
+  line-height: 1.55;
+  display: block;
+}
+
+.anvil-workspace-message.is-user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.anvil-workspace-message.is-user > .anvil-workspace-message-bubble {
+  max-width: 75%;
+  padding: 9px 12px;
+  border-radius: 14px;
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+  font-size: 13px;
+}
+
+.anvil-workspace-message.is-agent {
+  max-width: 90%;
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-message.is-agent > .anvil-workspace-message-prose > strong {
+  font-weight: 600;
+}
+
+/* Per-turn token + cost footer under the agent's reply. Reads like
+   a build artifact — quiet, monospace, low-contrast — so it adds
+   information without competing with the message prose. Hover
+   brightens it so the user can read the precise values when they
+   actually care. */
+.anvil-workspace-message.is-agent > .anvil-workspace-message-tokens {
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  opacity: 0.6;
+  transition: opacity 120ms ease;
+  letter-spacing: 0.01em;
+}
+
+.anvil-workspace-message.is-agent:hover > .anvil-workspace-message-tokens {
+  opacity: 1;
+}
+
+.anvil-workspace-message.is-system {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 6px 0;
+  border-top: 0.5px dashed var(--color-border-tertiary);
+  border-bottom: 0.5px dashed var(--color-border-tertiary);
+}
+
+/* Agent thinking indicator (before first token) */
+.anvil-workspace-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 90%;
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}
+
+.anvil-workspace-thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.anvil-workspace-thinking-dots > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: anvil-workspace-thinking 1.2s ease-in-out infinite;
+}
+
+.anvil-workspace-thinking-dots > span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.anvil-workspace-thinking-dots > span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes anvil-workspace-thinking {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 1; }
+}
+
+/* ───── Right-pane editor (Context / Script sections) — direct
+   children of .anvil-workspace-section: quiet doc header +
+   markdown editor. ───── */
+
+.anvil-workspace-section {
+  background: var(--color-background-primary);
+}
+
+/* Shared header strip used by every right-pane variant (Context,
+   Script doc editor; Assets, Workshop media preview). Title + meta
+   on the left, status/actions on the right. */
+
+.anvil-workspace-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-primary);
+  flex-shrink: 0;
+}
+
+.anvil-workspace-section > header > div:first-child {
+  min-width: 0;
+}
+
+.anvil-workspace-section > header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-section > header p {
+  font-size: 11px;
+  margin: 3px 0 0;
+  color: var(--color-text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anvil-workspace-section > header > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.anvil-workspace-section > header span {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.anvil-workspace-section > header span.is-dirty {
+  color: var(--color-text-info);
+  font-weight: 500;
+}
+
+.anvil-workspace-section > header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  padding: 0 10px;
+  background: transparent;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.anvil-workspace-section > header button:hover {
+  background: var(--color-background-tertiary);
+  color: var(--color-text-primary);
+}
+
+.anvil-workspace-section > header button.is-active {
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+  border-color: rgba(167, 139, 250, 0.25);
+}
+
+.anvil-workspace-section--context > header button:last-child,
+.anvil-workspace-section--script > header button:last-child {
+  background: var(--color-background-info);
+  color: var(--color-text-info);
+  border-color: rgba(167, 139, 250, 0.25);
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+.anvil-workspace-section--context > header button:last-child:disabled,
+.anvil-workspace-section--script > header button:last-child:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.anvil-workspace-section--context > .anvil-workspace-editor-body,
+.anvil-workspace-section--script > .anvil-workspace-editor-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--color-background-primary);
+}
+
+.anvil-workspace-section--context > .anvil-workspace-editor-body.has-history,
+.anvil-workspace-section--script > .anvil-workspace-editor-body.has-history {
+  grid-template-columns: 1fr 300px;
+}
+
+.anvil-workspace-section--context > .anvil-workspace-editor-body > textarea,
+.anvil-workspace-section--script > .anvil-workspace-editor-body > textarea {
+  width: 100%;
+  height: 100%;
+  padding: 24px 28px;
+  background: transparent;
+  border: none;
+  resize: none;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.anvil-workspace-section--context > .anvil-workspace-editor-body > textarea:focus,
+.anvil-workspace-section--script > .anvil-workspace-editor-body > textarea:focus {
+  outline: none;
+}
+
+.anvil-workspace-section--context > .anvil-workspace-editor-body > textarea::placeholder,
+.anvil-workspace-section--script > .anvil-workspace-editor-body > textarea::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.anvil-workspace-section--context > .anvil-workspace-editor-body > .anvil-workspace-history,
+.anvil-workspace-section--script > .anvil-workspace-editor-body > .anvil-workspace-history {
+  border-left: 0.5px solid var(--color-border-tertiary);
+  background: var(--color-background-secondary);
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+/* ───── Right-pane media preview body (Assets / Workshop) ───── */
+
+.anvil-workspace-preview-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.anvil-workspace-preview-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 20px;
+}
+
+.anvil-workspace-preview-stage > img,
+.anvil-workspace-preview-stage > video {
+  flex: 1;
+  min-height: 0;
+  max-width: 100%;
+  object-fit: contain;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-lg);
+}
+
+.anvil-workspace-preview-stage--audio {
+  align-items: center;
+  justify-content: center;
+}
+
+.anvil-workspace-preview-stage--audio > audio {
+  width: 100%;
+  max-width: 480px;
+}
+
+.anvil-workspace-preview-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  padding: 32px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+
+.anvil-workspace-preview-empty > strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.anvil-workspace-preview-empty > p {
+  font-size: 12px;
+  margin: 0;
+}
+
+/* ───── Asset card preview (Phase D4) ───── */
+
+.anvil-workspace-asset-card-title {
+  display: block;
+  width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--border-radius-md);
+  padding: 4px 6px;
+  margin: -4px 0 0 -6px;
+  font-family: inherit;
+}
+
+.anvil-workspace-asset-card-title:hover {
+  border-color: var(--color-border-tertiary);
+}
+
+.anvil-workspace-asset-card-title:focus {
+  outline: none;
+  border-color: var(--color-text-info);
+  background: var(--color-background-tertiary);
+}
+
+/* Upload-progress chip in the asset card header. Tiny mono badge
+   that lives next to Upload / Delete while mediaBusy is true.
+   Reads the live percentage from mediaProgress (improvement-plan 4.6).
+   Vertical-align matches the button row, padding keeps it pill-shaped. */
+.anvil-workspace-asset-card-progress {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin-right: 6px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(167, 139, 250, 0.14);
+  border: 0.5px solid rgba(167, 139, 250, 0.35);
+  color: var(--color-text-info);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Asset card preview body — varies by section.
+   - Image sections (characters/locations/props/keyframes): dashed
+     dropzone with empty-state copy.
+   - Audio cards: empty <audio controls> placeholder + drop hint.
+   - Video cards (when that section lands): empty <video controls>. */
+.anvil-workspace-asset-card-preview {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 20px 24px 24px;
+  padding: 32px 20px;
+  border: 0.5px dashed var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.anvil-workspace-asset-card-preview small {
+  color: var(--color-text-tertiary);
+  font-size: 11px;
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+.anvil-workspace-asset-card-preview--audio > audio {
+  width: min(420px, 100%);
+}
+
+.anvil-workspace-asset-card-preview--video > video {
+  width: min(640px, 100%);
+  max-height: 320px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: var(--border-radius-md);
+}
+
+/* Bound-media variant — once a card has uploaded media attached
+   we drop the dashed placeholder framing and let the asset fill
+   the body. Solid border-radius + transparent border so the image
+   reads as the canvas, not a sample inside a sample. */
+.anvil-workspace-asset-card-preview--bound {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.anvil-workspace-asset-card-preview--bound > img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--border-radius-md);
+  background: rgba(0, 0, 0, 0.32);
+}
+
+/* ───── §6 Right-pane collapsed gutter ───── */
+
+.anvil-workspace-right-gutter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  border: none;
+  background: var(--color-background-secondary);
+  border-left: 0.5px solid var(--color-border-tertiary);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+}
+
+.anvil-workspace-right-gutter:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-background-tertiary);
+}
+
+/* ───── Composer override — single-row pill (attach + textarea + send) ─────
+   Overrides the column-stack rules earlier in this file. Specificity bump
+   via the .anvil-workspace-composer class on the form. */
+
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 6px;
+  padding: 10px 24px 18px;
+  border-top: 0.5px solid var(--color-border-tertiary);
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer textarea {
+  min-height: 44px;
+  max-height: 200px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  resize: none;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer .anvil-workspace-composer-attach {
+  align-self: end;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text-info);
+  cursor: pointer;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer .anvil-workspace-composer-attach:hover:not(:disabled) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--color-text-info);
+  opacity: 0.7;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer .anvil-workspace-composer-attach:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer button[type="submit"] {
+  align-self: end;
+  height: 44px;
+  padding: 0 18px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-text-info);
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 120ms ease, opacity 120ms ease;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer button[type="submit"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer button[type="submit"]:hover:not(:disabled) {
+  opacity: 0.75;
+}
+
+/* Ephemeral attach-status pill — sits above the input row, spans all
+   3 grid columns, justified left so it reads like a small affordance.
+   Auto-dismisses from JS after 2.5s. */
+.anvil-workspace-shell .anvil-workspace-agent > form.anvil-workspace-composer .anvil-workspace-composer-toast {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--color-background-secondary);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  animation: anvil-composer-toast-in 160ms ease-out;
+}
+
+@keyframes anvil-composer-toast-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Drag-and-drop highlight moved out of the composer and onto the
+   agent column itself — see .anvil-workspace-agent.is-drag-over +
+   .anvil-workspace-agent-drop-overlay above. Improvement-plan 4.7. */
+
+/* ───── Empty-section state ───── */
+/* Tiny centered "nothing here yet" panel for sections with no items.
+   Doesn't replace the full section chrome — it just fills the body
+   so the user sees what's missing + the one CTA matching the +New
+   action in the docs rail head. Improvement-plan 4.4. */
+.anvil-workspace-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 32px 24px;
+  text-align: center;
+}
+.anvil-workspace-empty-state > p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  max-width: 280px;
+  line-height: 1.5;
+}
+.anvil-workspace-empty-state > button {
+  background: transparent;
+  border: 0.5px solid rgba(167, 139, 250, 0.45);
+  border-radius: 6px;
+  color: var(--color-text-info);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.anvil-workspace-empty-state > button:hover {
+  background: rgba(167, 139, 250, 0.08);
+  border-color: rgba(167, 139, 250, 0.65);
+}
+.anvil-workspace-empty-state > button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ───── Rail row warning chip ───── */
+/* Small ⚠ glyph appended to a row's label when the row has a
+   non-fatal problem the user should know about — currently scene
+   stems that collide case-insensitively on macOS APFS, but the
+   styling is generic. Muted tertiary color so it doesn't compete
+   with the violet active-state; the glyph itself carries the
+   "attention" semantic. Hover reveals the full message via title.
+   Improvement-plan §5.7. */
+.anvil-workspace-rail-row-warn {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--color-text-tertiary);
+  opacity: 0.85;
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+}
+.anvil-workspace-rail-row-warn:hover { opacity: 1; }
+
+/* ───── Native textarea auto-grow ───── */
+/* Browsers that support field-sizing handle textarea auto-grow
+   natively — no JS measurement on each keystroke. The JS path in
+   ChatComposer / MarkdownEditor stays as a fallback for older
+   browsers via a @supports check on the JS side. Improvement-plan
+   §1.4. */
+@supports (field-sizing: content) {
+  .anvil-workspace-shell .anvil-workspace-agent > form textarea,
+  .anvil-workspace-section .anvil-workspace-editor-body > textarea {
+    field-sizing: content;
+  }
+}
+
+/* ───── Chat thread "↓ N new" pill ───── */
+/* Sticky pill that appears when the user has scrolled up to read
+   history and new messages arrive in the meantime. Click to catch
+   up. Improvement-plan §1.8. */
+.anvil-workspace-thread-newpill {
+  position: sticky;
+  bottom: 12px;
+  align-self: center;
+  /* Pull up so the pill floats over the last visible message
+     rather than pushing the content. */
+  margin-top: -36px;
+  z-index: 2;
+  background: rgba(167, 139, 250, 0.16);
+  border: 0.5px solid rgba(167, 139, 250, 0.45);
+  color: var(--color-text-info);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.45);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.anvil-workspace-thread-newpill:hover {
+  background: rgba(167, 139, 250, 0.24);
+  border-color: rgba(167, 139, 250, 0.65);
+}
+
+/* ───── Touch-device hover affordances ───── */
+/* On coarse pointers (iPad, Surface, phones), there's no hover —
+   so the hover-revealed +scene / +prompt / × delete buttons would
+   never appear and look like a bug. Reveal them permanently on
+   coarse pointers. Improvement-plan 4.8. */
+@media (pointer: coarse) {
+  .anvil-workspace-rail-scene-add,
+  .anvil-workspace-rail-card-delete {
+    opacity: 1;
+  }
+}

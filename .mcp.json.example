@@ -1,0 +1,17 @@
+{
+  "_setup": "Copy this file to .mcp.json (gitignored) in each worktree. Replace --role arg with your worktree identity: main | ui | context | scripts | assets. See CLAUDE.md 'Claude specialist agents'.",
+  "mcpServers": {
+    "anvil-agents": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/your/private-agent-server.mjs",
+        "--role",
+        "REPLACE_WITH_WORKTREE_ROLE"
+      ]
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=YOUR_PROJECT_REF"
+    }
+  }
+}

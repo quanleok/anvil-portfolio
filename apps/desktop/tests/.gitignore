@@ -1,0 +1,4 @@
+# Per-run audit artifacts. Captured by playwright; never commit.
+screenshots/
+test-results/
+playwright-report/

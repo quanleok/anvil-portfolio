@@ -1,0 +1,18 @@
+create index idx_story_units_project on public.story_units (project_id);
+create index idx_story_units_parent on public.story_units (parent_id, position);
+create index idx_entities_project on public.entities (project_id);
+create index idx_entities_family on public.entities (project_id, family);
+create index idx_scene_entities_scene on public.scene_entities (scene_id);
+create index idx_scene_entities_entity on public.scene_entities (entity_id);
+create index idx_scene_entities_project on public.scene_entities (project_id);
+create index idx_prompts_project on public.prompts (project_id);
+create index idx_prompts_scene on public.prompts (scene_id);
+create index idx_dialogue_scene on public.dialogue (scene_id);
+create index idx_evidence_project on public.evidence (project_id);
+create index idx_entity_media_entity on public.entity_media (entity_id);
+create index idx_constraints_project on public.constraints (project_id);
+create index idx_constraints_entity on public.constraints (entity_id);
+create index idx_local_overrides_scene on public.local_overrides (scene_id);
+create index idx_local_overrides_entity on public.local_overrides (entity_id);
+create index idx_versions_target on public.versions (target_type, target_id);
+create index idx_operation_log_project on public.operation_log (project_id);
